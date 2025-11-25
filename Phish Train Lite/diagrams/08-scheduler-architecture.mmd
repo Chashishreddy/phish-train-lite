@@ -1,0 +1,30 @@
+flowchart TD
+    Start([Scheduler Starts<br/>60s Interval]) --> Query1[Query: Find campaigns<br/>approved=1 AND enable_sending=1<br/>AND status='scheduled'<br/>AND start_time <= NOW]
+
+    Query1 --> HasCampaigns1{Campaigns<br/>found?}
+
+    HasCampaigns1 -->|Yes| ProcessCampaign[For each campaign]
+    HasCampaigns1 -->|No| Query2
+
+    ProcessCampaign --> GetTargets[Get campaign_targets]
+    GetTargets --> SendEmails[Send emails to each target]
+    SendEmails --> LogEvent1[Log 'delivered' events]
+    LogEvent1 --> UpdateStatus1[Update status to 'running']
+    UpdateStatus1 --> Query2
+
+    Query2[Query: Find campaigns<br/>status='running'<br/>AND end_time <= NOW] --> HasCampaigns2{Campaigns<br/>found?}
+
+    HasCampaigns2 -->|Yes| ProcessDebrief[For each campaign]
+    HasCampaigns2 -->|No| Wait
+
+    ProcessDebrief --> GetParticipants[Get participants who<br/>opened/clicked/submitted]
+    GetParticipants --> SendDebrief[Send debrief emails]
+    SendDebrief --> UpdateStatus2[Update status to 'completed']
+    UpdateStatus2 --> Wait
+
+    Wait([Wait 60 seconds]) --> Start
+
+    style Start fill:#90ee90,stroke:#333,stroke-width:2px
+    style SendEmails fill:#ffd700,stroke:#333,stroke-width:2px
+    style SendDebrief fill:#87ceeb,stroke:#333,stroke-width:2px
+    style Wait fill:#ddd,stroke:#333,stroke-width:2px

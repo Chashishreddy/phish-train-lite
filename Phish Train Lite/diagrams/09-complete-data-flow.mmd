@@ -1,0 +1,50 @@
+flowchart LR
+    subgraph "1. Campaign Setup"
+        A1[Admin creates campaign] --> A2[Select template]
+        A2 --> A3[Set schedule]
+        A3 --> A4[Configure SMTP]
+        A4 --> A5[Save as Draft]
+    end
+
+    subgraph "2. Approval"
+        A5 --> B1{Admin approves?}
+        B1 -->|No| A5
+        B1 -->|Yes| B2[Set approved=1<br/>enable_sending=1]
+        B2 --> B3[Status: Scheduled]
+    end
+
+    subgraph "3. Execution"
+        B3 --> C1[Scheduler detects<br/>start_time reached]
+        C1 --> C2[Generate tokens<br/>for each target]
+        C2 --> C3[Send emails]
+        C3 --> C4[Status: Running]
+    end
+
+    subgraph "4. Tracking"
+        C4 --> D1[Track opens<br/>pixel.gif]
+        C4 --> D2[Track clicks<br/>redirect]
+        C4 --> D3[Track submissions<br/>landing page]
+        D1 --> D4[(Store events)]
+        D2 --> D4
+        D3 --> D4
+    end
+
+    subgraph "5. Analytics"
+        D4 --> E1[Calculate metrics]
+        E1 --> E2[Display dashboard]
+        E2 --> E3{Click rate > 50%?}
+        E3 -->|Yes| E4[Notify manager]
+        E3 -->|No| E5[Continue tracking]
+    end
+
+    subgraph "6. Completion"
+        E4 --> F1[end_time reached]
+        E5 --> F1
+        F1 --> F2[Send debriefs]
+        F2 --> F3[Status: Completed]
+    end
+
+    style A1 fill:#e1f5ff,stroke:#333,stroke-width:2px
+    style C3 fill:#ffd700,stroke:#333,stroke-width:2px
+    style D4 fill:#90ee90,stroke:#333,stroke-width:2px
+    style F3 fill:#ddd,stroke:#333,stroke-width:2px

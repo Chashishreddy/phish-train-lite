@@ -1,0 +1,60 @@
+graph LR
+    subgraph "Client Layer"
+        Browser[Web Browser]
+        EmailClient[Email Client]
+    end
+
+    subgraph "Middleware Layer"
+        RateLimit[Rate Limiter<br/>100 req/min]
+        CORS[CORS Handler]
+        JSON[JSON Parser]
+    end
+
+    subgraph "API Routes"
+        Allowlist["/api/allowlist"]
+        Campaigns["/api/campaigns"]
+        Analytics["/api/campaigns/:id/analytics"]
+        Track["/track/:token/*"]
+        Landing["/landing/:token"]
+    end
+
+    subgraph "Business Logic"
+        Validation[Domain Validation<br/>safety.js]
+        TokenGen[Token Generator<br/>SHA-256]
+        TemplateEngine[Template Engine<br/>templates.js]
+    end
+
+    subgraph "Data Access"
+        Query[Database Queries<br/>runQuery, runGet]
+    end
+
+    Browser --> RateLimit
+    EmailClient --> RateLimit
+
+    RateLimit --> CORS
+    CORS --> JSON
+
+    JSON --> Allowlist
+    JSON --> Campaigns
+    JSON --> Analytics
+    JSON --> Track
+    JSON --> Landing
+
+    Allowlist --> Validation
+    Campaigns --> Validation
+    Campaigns --> TokenGen
+    Campaigns --> TemplateEngine
+
+    Validation --> Query
+    TokenGen --> Query
+    TemplateEngine --> Query
+    Track --> Query
+    Landing --> Query
+    Analytics --> Query
+
+    Query --> SQLite[(SQLite DB)]
+
+    style Browser fill:#e1f5ff,stroke:#333,stroke-width:2px
+    style EmailClient fill:#e1f5ff,stroke:#333,stroke-width:2px
+    style RateLimit fill:#ffe1e1,stroke:#333,stroke-width:2px
+    style SQLite fill:#003b57,stroke:#333,stroke-width:2px,color:#fff

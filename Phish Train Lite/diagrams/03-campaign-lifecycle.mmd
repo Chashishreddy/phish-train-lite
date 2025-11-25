@@ -1,0 +1,33 @@
+stateDiagram-v2
+    [*] --> Draft: Create Campaign
+
+    Draft --> Scheduled: Admin Approves +<br/>enable_sending=1
+    Draft --> Draft: Edit Campaign
+
+    Scheduled --> Running: Scheduler detects<br/>start_time reached
+    Scheduled --> Draft: Admin disables
+
+    Running --> Running: Send emails<br/>Track events
+    Running --> Completed: Scheduler detects<br/>end_time reached
+
+    Completed --> Debriefed: Send debrief emails<br/>to participants
+
+    Debriefed --> [*]
+
+    note right of Scheduled
+        Campaign waits for
+        scheduler tick
+    end note
+
+    note right of Running
+        - Send to allowlist only
+        - Track opens/clicks
+        - Collect submissions
+        - Notify managers if
+          click rate > 50%
+    end note
+
+    note right of Completed
+        Campaign ended but
+        debrief not sent yet
+    end note

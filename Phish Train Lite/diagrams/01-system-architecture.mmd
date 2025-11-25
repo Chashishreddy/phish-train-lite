@@ -1,0 +1,47 @@
+graph TB
+    subgraph "Frontend (Port 5173)"
+        UI[React Admin Dashboard]
+        Vite[Vite Dev Server]
+        UI --> Vite
+    end
+
+    subgraph "Backend (Port 4000)"
+        API[Express API Server<br/>server.js]
+        Scheduler[Campaign Scheduler<br/>60s interval]
+
+        subgraph "Core Modules"
+            DB[Database Module<br/>db.js]
+            Mailer[Email Transport<br/>mailer.js]
+            Safety[Domain Validator<br/>safety.js]
+            Templates[Email Templates<br/>templates.js]
+        end
+
+        API --> DB
+        API --> Mailer
+        API --> Safety
+        API --> Templates
+        Scheduler --> DB
+        Scheduler --> Mailer
+    end
+
+    subgraph "Data Layer"
+        SQLite[(SQLite Database<br/>phish-train-lite.sqlite)]
+    end
+
+    subgraph "External Services"
+        SMTP[SMTP Server<br/>Configurable]
+        Email[Employee Email Clients]
+    end
+
+    Vite -->|Proxy /api requests| API
+    DB --> SQLite
+    Mailer -->|Send emails via| SMTP
+    SMTP -->|Deliver to| Email
+    Email -->|Click tracking links| API
+    Email -->|Open tracking pixel| API
+    Email -->|Submit landing page| API
+
+    style UI fill:#61dafb,stroke:#333,stroke-width:2px
+    style API fill:#68a063,stroke:#333,stroke-width:2px
+    style SQLite fill:#003b57,stroke:#333,stroke-width:2px,color:#fff
+    style Scheduler fill:#ff6b6b,stroke:#333,stroke-width:2px

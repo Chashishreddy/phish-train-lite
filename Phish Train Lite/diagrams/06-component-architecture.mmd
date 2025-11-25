@@ -1,0 +1,35 @@
+graph TD
+    subgraph "App.jsx (Main Component)"
+        App[App Component<br/>State: campaigns, employees, activeTab]
+
+        subgraph "Child Components"
+            AllowlistMgr[AllowlistManager<br/>Manage employees]
+            CampaignForm[CampaignForm<br/>Create campaigns]
+            CampaignList[CampaignList<br/>Manage campaigns]
+            Analytics[CampaignAnalytics<br/>View metrics]
+        end
+    end
+
+    subgraph "API Communication"
+        FetchAPI[Fetch API Calls]
+    end
+
+    subgraph "Backend API"
+        API[Express Server]
+    end
+
+    App --> AllowlistMgr
+    App --> CampaignForm
+    App --> CampaignList
+    App --> Analytics
+
+    AllowlistMgr --> FetchAPI
+    CampaignForm --> FetchAPI
+    CampaignList --> FetchAPI
+    Analytics --> FetchAPI
+
+    FetchAPI -->|HTTP Requests| API
+    API -->|JSON Responses| FetchAPI
+
+    style App fill:#61dafb,stroke:#333,stroke-width:3px
+    style API fill:#68a063,stroke:#333,stroke-width:2px

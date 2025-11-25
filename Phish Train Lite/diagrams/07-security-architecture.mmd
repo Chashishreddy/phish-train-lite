@@ -1,0 +1,49 @@
+graph TB
+    subgraph "Input Validation Layer"
+        EmailInput[Email Input]
+        DomainCheck{Domain Blacklist Check<br/>safety.js}
+        EmailInput --> DomainCheck
+    end
+
+    subgraph "Approval Workflow"
+        CampaignCreate[Campaign Created]
+        ApprovalCheck{Approved?}
+        SendingCheck{enable_sending?}
+
+        CampaignCreate --> ApprovalCheck
+        ApprovalCheck -->|No| Draft[Status: Draft]
+        ApprovalCheck -->|Yes| SendingCheck
+        SendingCheck -->|No| Draft
+        SendingCheck -->|Yes| Scheduled[Status: Scheduled]
+    end
+
+    subgraph "Runtime Safety"
+        AllowlistFilter[Allowlist Filter]
+        RateLimit[Rate Limiting<br/>100 req/min]
+        IPHash[IP Hashing<br/>Privacy Protection]
+    end
+
+    subgraph "Email Transport Safety"
+        TransportMode{Transport Mode}
+        Console[Console Logger<br/>Default/Safe]
+        SMTP[SMTP Transport<br/>Requires Config]
+
+        TransportMode -->|No config| Console
+        TransportMode -->|Config provided| SMTP
+    end
+
+    DomainCheck -->|Blocked| Reject[❌ Reject]
+    DomainCheck -->|Allowed| AllowlistFilter
+
+    Scheduled --> AllowlistFilter
+    AllowlistFilter --> RateLimit
+    RateLimit --> TransportMode
+
+    SMTP --> IPHash
+    Console --> IPHash
+
+    IPHash --> EventLog[(Log Events)]
+
+    style Reject fill:#ff6b6b,stroke:#333,stroke-width:2px
+    style Console fill:#90ee90,stroke:#333,stroke-width:2px
+    style AllowlistFilter fill:#ffd700,stroke:#333,stroke-width:2px

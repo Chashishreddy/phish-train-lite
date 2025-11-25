@@ -1,0 +1,38 @@
+sequenceDiagram
+    participant Admin
+    participant Backend
+    participant Scheduler
+    participant SMTP
+    participant Employee
+    participant EmailClient
+
+    Admin->>Backend: Create Campaign
+    Admin->>Backend: Approve Campaign
+
+    loop Every 60 seconds
+        Scheduler->>Backend: Check for campaigns to send
+        Backend->>Backend: Validate allowlist
+        Backend->>Backend: Generate unique tokens
+        Backend->>SMTP: Send phishing emails
+        SMTP->>EmailClient: Deliver email
+    end
+
+    EmailClient->>Employee: Display email
+    Employee->>EmailClient: Open email
+    EmailClient->>Backend: GET /track/{token}/pixel.gif
+    Backend->>Backend: Log "opened" event
+
+    Employee->>EmailClient: Click link
+    EmailClient->>Backend: GET /track/{token}/click
+    Backend->>Backend: Log "clicked" event
+    Backend->>EmailClient: Redirect to landing page
+
+    Employee->>Backend: GET /landing/{token}
+    Backend->>Employee: Show fake login form
+    Employee->>Backend: POST /landing/{token}/submit
+    Backend->>Backend: Log "submitted" event
+    Backend->>Employee: Show debrief message
+
+    alt Click rate > 50%
+        Backend->>Admin: Send manager notification
+    end
