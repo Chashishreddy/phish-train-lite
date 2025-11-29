@@ -456,18 +456,33 @@ app.post('/api/allowlist', authenticateToken, requireRole('admin', 'manager'), a
     if (!Array.isArray(employees)) {
       return res.status(400).json({ error: 'employees array required' });
     }
+
+    let added = 0;
+    const rejectedEmails = [];
     const stmt = db.prepare('INSERT OR REPLACE INTO employees(email, name, department) VALUES(?,?,?)');
+
     for (const entry of employees) {
       if (!entry.email) continue;
       if (!isDomainAllowed(entry.email)) {
         console.warn(`Rejected allowlist entry for forbidden domain: ${entry.email}`);
+        rejectedEmails.push({
+          email: entry.email,
+          reason: 'Blocked domain (gmail.com, yahoo.com, outlook.com, hotmail.com not allowed)'
+        });
         continue;
       }
       stmt.run(entry.email.toLowerCase(), entry.name || '', entry.department || '');
+      added++;
     }
     stmt.finalize();
+
     const saved = await runQuery('SELECT email, name, department FROM employees ORDER BY email ASC');
-    res.json({ employees: saved });
+    res.json({
+      employees: saved,
+      added,
+      rejected: rejectedEmails.length,
+      rejectedEmails
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -479,21 +494,37 @@ app.post('/api/allowlist/upload', authenticateToken, requireRole('admin', 'manag
     if (!csv) return res.status(400).json({ error: 'CSV body required' });
     const lines = csv.split(/\r?\n/).filter(Boolean);
     const employees = [];
+    const rejectedEmails = [];
+    let totalRows = 0;
+
     for (const line of lines) {
       const [email, name, department] = line.split(',').map(part => part.trim());
       if (!email) continue;
+      totalRows++;
+
       if (!isDomainAllowed(email)) {
         console.warn(`Rejected CSV allowlist entry for forbidden domain: ${email}`);
+        rejectedEmails.push({
+          email,
+          reason: 'Blocked domain (gmail.com, yahoo.com, outlook.com, hotmail.com not allowed)'
+        });
         continue;
       }
       employees.push({ email: email.toLowerCase(), name: name || '', department: department || '' });
     }
+
     const stmt = db.prepare('INSERT OR REPLACE INTO employees(email, name, department) VALUES(?,?,?)');
     for (const entry of employees) {
       stmt.run(entry.email, entry.name, entry.department);
     }
     stmt.finalize();
-    res.json({ imported: employees.length });
+
+    res.json({
+      imported: employees.length,
+      rejected: rejectedEmails.length,
+      totalRows,
+      rejectedEmails: rejectedEmails.slice(0, 10) // Return first 10 rejected for display
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -961,33 +992,44 @@ app.put('/api/campaigns/:id', authenticateToken, requireRole('admin', 'manager')
   try {
     const campaign = await runGet('SELECT * FROM campaigns WHERE id = ?', [req.params.id]);
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
-    if (['running', 'completed'].includes(campaign.status)) {
-      return res.status(400).json({ error: 'Cannot edit running or completed campaigns' });
-    }
 
     const updateFields = [];
     const updateValues = [];
-    const editable = ['name', 'template_key', 'subject', 'scheduled_time', 'end_time', 'from_email', 'manager_email', 'smtp_host', 'smtp_port', 'smtp_user'];
-    for (const key of editable) {
-      if (key in req.body) {
-        updateFields.push(`${key} = ?`);
-        updateValues.push(req.body[key]);
+
+    // Allow enable_sending to be changed even for running campaigns (safety control)
+    const isOnlyTogglingSending = Object.keys(req.body).length === 1 && 'enable_sending' in req.body;
+
+    // Block other edits for running/completed campaigns
+    if (['running', 'completed'].includes(campaign.status) && !isOnlyTogglingSending) {
+      return res.status(400).json({ error: 'Cannot edit running or completed campaigns (except enable_sending)' });
+    }
+
+    // Only allow these fields to be edited for non-running campaigns
+    if (!['running', 'completed'].includes(campaign.status)) {
+      const editable = ['name', 'template_key', 'subject', 'scheduled_time', 'end_time', 'from_email', 'manager_email', 'smtp_host', 'smtp_port', 'smtp_user'];
+      for (const key of editable) {
+        if (key in req.body) {
+          updateFields.push(`${key} = ?`);
+          updateValues.push(req.body[key]);
+        }
+      }
+
+      // Handle smtp_pass separately to encrypt it
+      if ('smtp_pass' in req.body) {
+        updateFields.push('smtp_pass = ?');
+        updateValues.push(req.body.smtp_pass ? encrypt(req.body.smtp_pass) : '');
+      }
+
+      if ('approval' in req.body) {
+        updateFields.push('approval = ?');
+        updateValues.push(req.body.approval ? 1 : 0);
       }
     }
 
-    // Handle smtp_pass separately to encrypt it
-    if ('smtp_pass' in req.body) {
-      updateFields.push('smtp_pass = ?');
-      updateValues.push(req.body.smtp_pass ? encrypt(req.body.smtp_pass) : '');
-    }
-
+    // Always allow enable_sending to be changed (even for running campaigns)
     if ('enable_sending' in req.body) {
       updateFields.push('enable_sending = ?');
       updateValues.push(req.body.enable_sending ? 1 : 0);
-    }
-    if ('approval' in req.body) {
-      updateFields.push('approval = ?');
-      updateValues.push(req.body.approval ? 1 : 0);
     }
 
     updateFields.push('updated_at = ?', 'updated_by = ?');
@@ -1115,7 +1157,7 @@ app.post('/api/campaigns/:id/clone', authenticateToken, requireRole('admin', 'ma
     const result = await runExecute(
       `INSERT INTO campaigns (
         name, template_key, subject, scheduled_time, end_time,
-        from_email, manager_email, smtp_server, smtp_port, smtp_user, smtp_pass,
+        from_email, manager_email, smtp_host, smtp_port, smtp_user, smtp_pass,
         status, approval, enable_sending, recipient_count,
         created_by, updated_by, created_at, updated_at
       ) VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, 'draft', 0, 0, ?, ?, ?, ?, ?)`,
@@ -1125,7 +1167,7 @@ app.post('/api/campaigns/:id/clone', authenticateToken, requireRole('admin', 'ma
         originalCampaign.subject,
         originalCampaign.from_email,
         originalCampaign.manager_email,
-        originalCampaign.smtp_server,
+        originalCampaign.smtp_host,
         originalCampaign.smtp_port,
         originalCampaign.smtp_user,
         originalCampaign.smtp_pass, // Already encrypted

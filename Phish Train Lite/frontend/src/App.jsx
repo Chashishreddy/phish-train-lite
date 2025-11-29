@@ -271,14 +271,38 @@ function AllowlistManager({ allowlist, refresh }) {
   const submitManual = async () => {
     try {
       const filtered = formEntries.filter(entry => entry.email);
-      await apiCall('/api/allowlist', {
+
+      if (filtered.length === 0) {
+        toast.info('No employees to add');
+        return;
+      }
+
+      const response = await apiCall('/api/allowlist', {
         method: 'POST',
         body: JSON.stringify({ employees: filtered })
       });
-      setMessage('Allowlist updated.');
+
+      const { added, rejected, rejectedEmails } = response;
+
+      // Show appropriate message based on result
+      if (added === 0 && rejected > 0) {
+        // All emails rejected
+        toast.error(`No employees added – all ${rejected} email${rejected > 1 ? 's' : ''} from blocked domains`);
+      } else if (rejected > 0) {
+        // Some rejected, some added
+        toast.warning(`${added} employee${added > 1 ? 's' : ''} added, ${rejected} rejected (blocked domains)`);
+      } else if (added > 0) {
+        // All added successfully
+        toast.success(`${added} employee${added > 1 ? 's' : ''} added successfully`);
+        // Clear form on success
+        setFormEntries([{ email: '', name: '', department: '' }]);
+      }
+
+      setMessage('');
       refresh();
     } catch (error) {
-      setMessage(error.message);
+      toast.error(`Failed to save: ${error.message}`);
+      setMessage('');
     }
   };
 
@@ -305,7 +329,7 @@ function AllowlistManager({ allowlist, refresh }) {
   const uploadCsv = async () => {
     try {
       const API_BASE = import.meta.env.VITE_API_BASE || '';
-      await fetch(`${API_BASE}/api/allowlist/upload`, {
+      const response = await fetch(`${API_BASE}/api/allowlist/upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/csv',
@@ -314,7 +338,29 @@ function AllowlistManager({ allowlist, refresh }) {
         },
         body: csv
       });
-      toast.success('CSV imported successfully');
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const data = await response.json();
+      const { imported, rejected, totalRows, rejectedEmails } = data;
+
+      // Show appropriate message based on result
+      if (imported === 0 && rejected > 0) {
+        // All emails rejected
+        toast.error(`No employees added – all ${rejected} email${rejected > 1 ? 's' : ''} from blocked domains`);
+      } else if (rejected > 0) {
+        // Some rejected, some imported
+        toast.warning(`CSV imported: ${imported} added, ${rejected} rejected (blocked domains)`);
+      } else if (imported > 0) {
+        // All imported successfully
+        toast.success(`CSV imported successfully: ${imported} employee${imported > 1 ? 's' : ''} added`);
+      } else {
+        // Empty CSV
+        toast.info('No valid employees found in CSV');
+      }
+
       setCsv('');
       setCsvPreview(null);
       refresh();
@@ -1247,21 +1293,42 @@ function CampaignList({ campaigns, onRefresh }) {
   const itemsPerPage = 10;
 
   const approve = async id => {
-    await apiCall(`/api/campaigns/${id}/approve`, { method: 'POST' });
-    onRefresh();
+    try {
+      await apiCall(`/api/campaigns/${id}/approve`, { method: 'POST' });
+      toast.success('Campaign approved successfully');
+      onRefresh();
+    } catch (error) {
+      toast.error(`Failed to approve campaign: ${error.message}`);
+    }
   };
 
   const queueSend = async id => {
-    await apiCall(`/api/campaigns/${id}/send`, { method: 'POST' });
-    onRefresh();
+    try {
+      await apiCall(`/api/campaigns/${id}/send`, { method: 'POST' });
+      toast.success('Campaign queued for sending');
+      onRefresh();
+    } catch (error) {
+      toast.error(`Failed to queue campaign: ${error.message}`);
+    }
   };
 
   const toggleSending = async (campaign, enabled) => {
-    await apiCall(`/api/campaigns/${campaign.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ enable_sending: enabled })
-    });
-    onRefresh();
+    try {
+      await apiCall(`/api/campaigns/${campaign.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ enable_sending: enabled })
+      });
+
+      if (enabled) {
+        toast.success(`Sending enabled for campaign "${campaign.name}"`);
+      } else {
+        toast.info(`Sending disabled for campaign "${campaign.name}"`);
+      }
+
+      onRefresh();
+    } catch (error) {
+      toast.error(`Failed to ${enabled ? 'enable' : 'disable'} sending: ${error.message}`);
+    }
   };
 
   const downloadCsv = id => {
@@ -1547,8 +1614,15 @@ function CampaignList({ campaigns, onRefresh }) {
                 <small>{campaign.template_key}</small>
               </td>
               <td>
-                <div>{campaign.status}</div>
-                {campaign.paused ? <span className="badge" style={{ background: '#dc2626', color: '#fff' }}>Paused</span> : null}
+                <div style={{ marginBottom: '0.25rem' }}>{campaign.status}</div>
+                <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                  {campaign.paused && <span className="badge" style={{ background: '#dc2626', color: '#fff' }}>Paused</span>}
+                  {campaign.enable_sending ? (
+                    <span className="badge" style={{ background: '#10b981', color: '#fff' }}>Sending Enabled</span>
+                  ) : (
+                    <span className="badge" style={{ background: '#6b7280', color: '#fff' }}>Sending Disabled</span>
+                  )}
+                </div>
               </td>
               <td>
                 <div>{campaign.scheduled_time ? formatDate(campaign.scheduled_time) : 'Not scheduled'}</div>

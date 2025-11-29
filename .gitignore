@@ -1,0 +1,3 @@
+# Ignore stray nul file and SQLite DBs
+nul
+*.sqlite
