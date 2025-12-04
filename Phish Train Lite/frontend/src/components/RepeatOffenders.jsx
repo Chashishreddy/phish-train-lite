@@ -66,8 +66,43 @@ export default function RepeatOffenders() {
   return (
     <div>
       <div className="card">
-        <h2>Repeat Offender Tracking</h2>
-        <p>Identify employees who repeatedly fall for phishing attempts and require additional training</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div>
+            <h2>Repeat Offender Tracking</h2>
+            <p>Identify employees who repeatedly fall for phishing attempts and require additional training</p>
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
+                const response = await fetch(`${API_BASE}/api/reports/repeat-offenders?minCampaigns=${threshold}&eventType=${eventType}`, {
+                  headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+                  }
+                });
+
+                if (!response.ok) {
+                  throw new Error('Failed to generate report');
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'repeat-offenders-report.pdf';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+              } catch (error) {
+                alert('Failed to download PDF: ' + error.message);
+              }
+            }}
+            style={{ background: '#C99E39', color: '#fff', padding: '0.75rem 1.5rem', whiteSpace: 'nowrap' }}
+          >
+            📄 Generate Report
+          </button>
+        </div>
 
         <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
           <div>

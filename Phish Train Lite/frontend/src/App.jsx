@@ -1072,7 +1072,7 @@ function IndividualSelector({ allowlist, selectedRecipients, toggleRecipient, se
   );
 }
 
-function CampaignForm({ templates, allowlist, onCreated }) {
+function CampaignForm({ templates, allowlist, onCreated, editingCampaign, onCancelEdit }) {
   const { apiCall, isManager } = useAuth();
   const [form, setForm] = useState({
     name: '',
@@ -1089,6 +1089,32 @@ function CampaignForm({ templates, allowlist, onCreated }) {
   const [selectedDepartments, setSelectedDepartments] = useState([]);
   const [recipientMode, setRecipientMode] = useState('departments');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Load campaign data when editing
+  useEffect(() => {
+    if (editingCampaign) {
+      // Fetch full campaign data including recipients
+      apiCall(`/api/campaigns/${editingCampaign.id}`)
+        .then(campaign => {
+          setForm({
+            name: campaign.name,
+            template_key: campaign.template_key,
+            subject: campaign.subject,
+            scheduled_time: campaign.scheduled_time || '',
+            end_time: campaign.end_time || '',
+            recipients: campaign.recipients || [],
+            from_email: campaign.from_email || '',
+            manager_email: campaign.manager_email || ''
+          });
+          setSelectedRecipients(campaign.recipients || []);
+          setStatus('');
+        })
+        .catch(err => {
+          setStatus(`Failed to load campaign data: ${err.message}`);
+          console.error(err);
+        });
+    }
+  }, [editingCampaign, apiCall]);
   const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
@@ -1125,11 +1151,23 @@ function CampaignForm({ templates, allowlist, onCreated }) {
     event.preventDefault();
     try {
       const payload = { ...form, recipients: finalRecipients };
-      await apiCall('/api/campaigns', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      setStatus('Campaign drafted. Remember to request approval and set enable-sending once ready.');
+
+      if (editingCampaign) {
+        // Update existing campaign
+        await apiCall(`/api/campaigns/${editingCampaign.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+        setStatus('Campaign updated successfully.');
+      } else {
+        // Create new campaign
+        await apiCall('/api/campaigns', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        setStatus('Campaign drafted. Remember to request approval and set enable-sending once ready.');
+      }
+
       setForm({
         name: '',
         template_key: templates[0]?.key || '',
@@ -1162,7 +1200,14 @@ function CampaignForm({ templates, allowlist, onCreated }) {
 
   return (
     <div className="card">
-      <h2>Create Campaign</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h2>{editingCampaign ? `Edit Campaign: ${editingCampaign.name}` : 'Create Campaign'}</h2>
+        {editingCampaign && (
+          <button type="button" onClick={onCancelEdit} style={{ background: '#6b7280' }}>
+            Cancel Edit
+          </button>
+        )}
+      </div>
       <form onSubmit={submit}>
         <label>Name</label>
         <input required value={form.name} onChange={event => update('name', event.target.value)} />
@@ -1252,7 +1297,7 @@ function CampaignForm({ templates, allowlist, onCreated }) {
         </div>
 
         <button type="submit" disabled={finalRecipients.length === 0}>
-          Create campaign
+          {editingCampaign ? 'Update campaign' : 'Create campaign'}
         </button>
       </form>
       {template && (
@@ -1275,7 +1320,7 @@ function CampaignForm({ templates, allowlist, onCreated }) {
   );
 }
 
-function CampaignList({ campaigns, onRefresh }) {
+function CampaignList({ campaigns, onRefresh, onEdit }) {
   const { apiCall, isAdmin, isManager } = useAuth();
   const toast = useToast();
   const [testEmailModal, setTestEmailModal] = useState(null);
@@ -1363,10 +1408,25 @@ function CampaignList({ campaigns, onRefresh }) {
         })
       });
 
-      setTestEmailStatus(`Success! Test email sent to ${response.sentTo}`);
-      setTimeout(() => {
-        setTestEmailModal(null);
-      }, 2000);
+      // Show detailed testing information with tracking URLs
+      const statusMessage = [
+        `✓ ${response.message}`,
+        `📧 Sent to: ${response.sentTo}`,
+        ``,
+        `📍 Open Tracking URL:`,
+        response.trackingPixelUrl,
+        ``,
+        `🔗 Click Tracking URL:`,
+        response.clickTrackingUrl,
+        ``,
+        `💡 Copy these URLs and open in browser to test tracking.`,
+        `Check backend console for email content.`
+      ].join('\n');
+
+      setTestEmailStatus(statusMessage);
+
+      // Don't auto-close so user can copy URLs
+      // User can manually close the modal
     } catch (error) {
       setTestEmailStatus(`Error: ${error.message}`);
     } finally {
@@ -1631,8 +1691,13 @@ function CampaignList({ campaigns, onRefresh }) {
               <td>{campaign.approval ? <span className="badge">Approved</span> : 'Pending'}</td>
               <td>{campaign.recipient_count || 0}</td>
               <td>
-                {!campaign.approval && isAdmin && <button onClick={() => approve(campaign.id)}>Approve</button>}
-                {campaign.approval && isAdmin && <button onClick={() => queueSend(campaign.id)}>Queue send</button>}
+                {campaign.status === 'draft' && isManager && (
+                  <button onClick={() => onEdit(campaign)}>Edit</button>
+                )}
+                {!campaign.approval && isAdmin && campaign.status !== 'draft' && (
+                  <button style={{ marginLeft: campaign.status === 'draft' ? '0' : '0.5rem' }} onClick={() => approve(campaign.id)}>Approve</button>
+                )}
+                {campaign.approval && isAdmin && <button style={{ marginLeft: '0.5rem' }} onClick={() => queueSend(campaign.id)}>Queue send</button>}
                 {isAdmin && (
                   <>
                     <button style={{ marginLeft: '0.5rem' }} onClick={() => toggleSending(campaign, !campaign.enable_sending)}>
@@ -1789,7 +1854,11 @@ function CampaignList({ campaigns, onRefresh }) {
                 borderRadius: '6px',
                 background: testEmailStatus.includes('Error') ? '#fee2e2' : '#d1fae5',
                 color: testEmailStatus.includes('Error') ? '#dc2626' : '#059669',
-                border: `1px solid ${testEmailStatus.includes('Error') ? '#fca5a5' : '#6ee7b7'}`
+                border: `1px solid ${testEmailStatus.includes('Error') ? '#fca5a5' : '#6ee7b7'}`,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                fontFamily: 'monospace',
+                fontSize: '0.9rem'
               }}>
                 {testEmailStatus}
               </div>
@@ -1957,7 +2026,40 @@ function CampaignAnalytics({ campaignId }) {
       <SimulationPanel campaignId={campaignId} onSimulated={refreshStats} />
 
       <div className="card">
-        <h2>Campaign Analytics</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h2>Campaign Analytics</h2>
+          <button
+            onClick={async () => {
+              try {
+                const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
+                const response = await fetch(`${API_BASE}/api/reports/campaign/${campaignId}`, {
+                  headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+                  }
+                });
+
+                if (!response.ok) {
+                  throw new Error('Failed to generate report');
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `campaign-${campaignId}-report.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+              } catch (error) {
+                alert('Failed to download PDF: ' + error.message);
+              }
+            }}
+            style={{ background: '#C99E39', color: '#fff', padding: '0.75rem 1.5rem' }}
+          >
+            📄 Download PDF Report
+          </button>
+        </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
           <h3>Real Events</h3>
@@ -1992,6 +2094,7 @@ function AppContent() {
   const [allowlist, setAllowlist] = useState({ employees: [], doNotSendDomains: [] });
   const [groups, setGroups] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
+  const [editingCampaign, setEditingCampaign] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [analyticsView, setAnalyticsView] = useState('campaigns');
 
@@ -2046,8 +2149,21 @@ function AppContent() {
 
         {activeTab === 'campaigns' && (
           <>
-            <CampaignForm templates={templates} allowlist={allowlist} onCreated={refreshCampaigns} />
-            <CampaignList campaigns={campaigns} onRefresh={refreshCampaigns} />
+            <CampaignForm
+              templates={templates}
+              allowlist={allowlist}
+              onCreated={() => {
+                refreshCampaigns();
+                setEditingCampaign(null);
+              }}
+              editingCampaign={editingCampaign}
+              onCancelEdit={() => setEditingCampaign(null)}
+            />
+            <CampaignList
+              campaigns={campaigns}
+              onRefresh={refreshCampaigns}
+              onEdit={setEditingCampaign}
+            />
           </>
         )}
 

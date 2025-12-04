@@ -1,3 +1,5 @@
 # Ignore stray nul file and SQLite DBs
 nul
 *.sqlite
+# Claude Code local settings
+.claude/

@@ -9,6 +9,8 @@ export default function EmployeeAnalytics() {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [sortField, setSortField] = useState('riskScore');
   const [sortDirection, setSortDirection] = useState('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [employeesPerPage] = useState(10);
   const { apiCall } = useAuth();
 
   useEffect(() => {
@@ -74,6 +76,17 @@ export default function EmployeeAnalytics() {
     }
   });
 
+  // Pagination calculations
+  const totalPages = Math.ceil(sortedEmployees.length / employeesPerPage);
+  const indexOfLastEmployee = currentPage * employeesPerPage;
+  const indexOfFirstEmployee = indexOfLastEmployee - employeesPerPage;
+  const currentEmployees = sortedEmployees.slice(indexOfFirstEmployee, indexOfLastEmployee);
+
+  const goToPage = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   function getRiskBadgeClass(score) {
     if (score >= 60) return 'badge-high-risk';
     if (score >= 40) return 'badge-medium-risk';
@@ -93,8 +106,43 @@ export default function EmployeeAnalytics() {
   return (
     <div>
       <div className="card">
-        <h2>Employee Security Analytics</h2>
-        <p>Track individual employee performance across all phishing campaigns</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div>
+            <h2>Employee Security Analytics</h2>
+            <p>Track individual employee performance across all phishing campaigns</p>
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000';
+                const response = await fetch(`${API_BASE}/api/reports/employees`, {
+                  headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+                  }
+                });
+
+                if (!response.ok) {
+                  throw new Error('Failed to generate report');
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'employee-analytics-report.pdf';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+              } catch (error) {
+                alert('Failed to download PDF: ' + error.message);
+              }
+            }}
+            style={{ background: '#C99E39', color: '#fff', padding: '0.75rem 1.5rem', whiteSpace: 'nowrap' }}
+          >
+            📄 Generate Employee Report
+          </button>
+        </div>
 
         {employees.length === 0 ? (
           <p>No employee data available. Run some campaigns first.</p>
@@ -143,7 +191,7 @@ export default function EmployeeAnalytics() {
                 </tr>
               </thead>
               <tbody>
-                {sortedEmployees.map(emp => (
+                {currentEmployees.map(emp => (
                   <tr key={emp.email} style={{ cursor: 'pointer' }} onClick={() => setSelectedEmployee(emp.email)}>
                     <td>{emp.name}</td>
                     <td>{emp.email}</td>
@@ -158,7 +206,11 @@ export default function EmployeeAnalytics() {
                     </td>
                     <td>{formatDate(emp.lastActivity)}</td>
                     <td>
-                      <button onClick={(e) => { e.stopPropagation(); setSelectedEmployee(emp.email); }}>
+                      <button onClick={(e) => {
+                        e.stopPropagation();
+                        console.log('View Details clicked for:', emp.email);
+                        setSelectedEmployee(emp.email);
+                      }}>
                         View Details
                       </button>
                     </td>
@@ -166,6 +218,48 @@ export default function EmployeeAnalytics() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Pagination Controls */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: '1.5rem',
+            padding: '1rem',
+            background: '#f9fafb',
+            borderRadius: '8px'
+          }}>
+            <div>
+              Showing {indexOfFirstEmployee + 1}-{Math.min(indexOfLastEmployee, sortedEmployees.length)} of {sortedEmployees.length} employees
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                style={{
+                  padding: '0.5rem 1rem',
+                  opacity: currentPage === 1 ? 0.5 : 1,
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                ← Previous
+              </button>
+              <span style={{ padding: '0.5rem 1rem', background: '#fff', border: '1px solid #C99E39', borderRadius: '4px' }}>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                style={{
+                  padding: '0.5rem 1rem',
+                  opacity: currentPage === totalPages ? 0.5 : 1,
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Next →
+              </button>
+            </div>
           </div>
         </div>
       )}

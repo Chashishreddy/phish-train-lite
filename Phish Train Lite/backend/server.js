@@ -921,6 +921,24 @@ app.get('/api/campaigns', authenticateToken, requireRole('admin', 'manager', 'vi
   }
 });
 
+app.get('/api/campaigns/:id', authenticateToken, requireRole('admin', 'manager', 'viewer'), async (req, res) => {
+  try {
+    const campaign = await runGet('SELECT * FROM campaigns WHERE id = ?', [req.params.id]);
+    if (!campaign) {
+      return res.status(404).json({ error: 'Campaign not found' });
+    }
+
+    // Get recipients
+    const targets = await runQuery('SELECT email, name, department FROM campaign_targets WHERE campaign_id = ?', [req.params.id]);
+    campaign.recipients = targets.map(t => t.email);
+    campaign.recipient_count = targets.length;
+
+    res.json(campaign);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/campaigns', authenticateToken, requireRole('admin', 'manager'), auditLog('CREATE_CAMPAIGN', 'campaign'), async (req, res) => {
   try {
     const {
@@ -1111,7 +1129,7 @@ app.post('/api/campaigns/:id/send-test', authenticateToken, requireRole('admin',
     const personalizedBody = maskTemplate(template.body, sampleData);
     const htmlBody = personalizedBody.replace(/\n/g, '<br/>');
 
-    // Create a test tracking token
+    // Create a test tracking token and temporary campaign_targets entry for testing
     const testToken = createToken(`test-${testEmail}-${campaign.id}`);
     const baseTrackingUrl = process.env.PUBLIC_TRACKING_URL || BASE_URL;
     const trackingPixel = `<img src="${baseTrackingUrl}/track/open/${testToken}.gif" alt="" width="1" height="1" style="display:none;"/>`;
@@ -1119,8 +1137,34 @@ app.post('/api/campaigns/:id/send-test', authenticateToken, requireRole('admin',
     const html = `<p>${htmlBody}</p><p><a href="${clickUrl}">Access secure page</a></p>${trackingPixel}`;
     const text = `${personalizedBody}\n\nAccess secure page: ${clickUrl}`;
 
-    const transport = createTransport(campaign);
-    await transport.sendMail({
+    // Insert temporary campaign_targets entry so test links work end-to-end
+    // Delete any existing test target for this email/campaign first
+    await runExecute(
+      'DELETE FROM campaign_targets WHERE campaign_id = ? AND email = ?',
+      [campaign.id, testEmail]
+    );
+
+    await runExecute(
+      'INSERT INTO campaign_targets (campaign_id, email, name, department, token) VALUES (?, ?, ?, ?, ?)',
+      [campaign.id, testEmail, sampleData.name, sampleData.department, testToken]
+    );
+
+    // Use console transport for test emails to avoid requiring SMTP configuration
+    // This allows testing tracking pixel and click URL functionality in development
+    const testTransport = {
+      sendMail: async (options) => {
+        console.log('\n=== Test Email (Console Transport) ===');
+        console.log('To:', options.to);
+        console.log('From:', options.from);
+        console.log('Subject:', options.subject);
+        console.log('\nText Body:\n', options.text);
+        console.log('\nHTML Body:\n', options.html);
+        console.log('======================================\n');
+        return { messageId: 'test-console-transport' };
+      }
+    };
+
+    await testTransport.sendMail({
       to: testEmail,
       from: campaign.from_email || process.env.MAIL_FROM || 'security-training@example.com',
       subject: `[TEST] ${campaign.subject}`,
@@ -1129,9 +1173,13 @@ app.post('/api/campaigns/:id/send-test', authenticateToken, requireRole('admin',
     });
 
     res.json({
-      message: 'Test email sent successfully',
+      message: 'Test email logged to console (no SMTP required)',
       sentTo: testEmail,
-      subject: `[TEST] ${campaign.subject}`
+      subject: `[TEST] ${campaign.subject}`,
+      trackingPixelUrl: `${baseTrackingUrl}/track/open/${testToken}.gif`,
+      clickTrackingUrl: clickUrl,
+      htmlPreview: html,
+      instructions: 'Check backend console for email content. Open trackingPixelUrl or clickTrackingUrl in browser to test tracking.'
     });
   } catch (error) {
     console.error('Failed to send test email:', error);
