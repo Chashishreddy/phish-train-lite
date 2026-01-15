@@ -1,9 +1,11 @@
 # Phish Train Lite - Complete Testing Guide
 
 **Version:** 1.3.0
-**Last Updated:** 2025-11-21
+**Last Updated:** 2025-12-04
 
-This guide will help you systematically test every feature across all 9 phases of the Phish Train Lite application.
+This guide will help you systematically test every feature across all 14 sections of the Phish Train Lite application.
+
+> **⚠️ Note:** Some advanced features (Training System, Webhooks, Scheduled Reports) have backend APIs but limited or no frontend UI. See individual sections for implementation status.
 
 ---
 
@@ -485,30 +487,29 @@ Create these groups:
 
 ### ✅ Feature 16: View All Templates
 
-**Test 5.1: List All 15 Templates**
+**Test 5.1: List All 16 Templates**
 
 1. Navigate to campaign creation form
 2. View template dropdown
 
 **Expected Result:**
-- ✅ 15 templates shown:
+- ✅ 16 templates shown:
   1. Login Verification Notice
   2. Security Policy Update
   3. Package Delivery Confirmation
-  4. Password Expiration Warning ⭐
-  5. Payroll Direct Deposit Update ⭐
-  6. IT Support Ticket Response ⭐
-  7. Shared Document Notification ⭐
-  8. Account Suspension Warning ⭐
-  9. Benefits Enrollment Deadline ⭐
-  10. Outstanding Invoice Payment ⭐
-  11. Critical Software Update ⭐
-  12. Urgent Meeting Invitation ⭐
-  13. Employee Recognition Award ⭐
-  14. VPN Access Renewal ⭐
-  15. Mandatory Compliance Training ⭐
-
-(⭐ = new in v1.3.0)
+  4. Password Expiration Warning
+  5. Payroll Direct Deposit Update
+  6. IT Support Ticket Response
+  7. Shared Document Notification
+  8. Account Suspension Warning
+  9. Benefits Enrollment Deadline
+  10. Outstanding Invoice Payment
+  11. Critical Software Update
+  12. Urgent Meeting Invitation
+  13. Employee Recognition Award
+  14. VPN Access Renewal
+  15. Employee Survey Response
+  16. Mandatory Compliance Training
 
 ---
 
@@ -529,10 +530,10 @@ Create these groups:
 
 **Test 5.3: Preview All Templates**
 
-Cycle through all 15 templates and verify:
+Cycle through all 16 templates and verify:
 - ✅ Each has unique subject
 - ✅ Each has unique body
-- ✅ Placeholders present
+- ✅ Placeholders present ({{name}}, {{department}})
 
 ---
 
@@ -1073,32 +1074,42 @@ Risk Score = (Clicked / Delivered) * 100
 
 ---
 
-### ✅ Feature 44: CSV Export
+### ✅ Feature 44: CSV Campaign Export
 
-**Test 9.5: Export Campaign Data to CSV**
+**Test 9.5: Export Campaign Events to CSV**
 
-1. In campaign view
-2. Click **"Export CSV"**
+1. Navigate to campaign analytics view
+2. Select a campaign with tracking events
+3. Click **"Export CSV"** button
 
 **Expected Result:**
-- ✅ CSV file downloads
-- ✅ Columns:
+- ✅ CSV file downloads (e.g., `campaign-2-export.csv`)
+- ✅ Contains columns:
   ```
-  email,name,department,delivered,opened,clicked,submitted,tracking_token
+  email,name,department,delivered,opened,clicked,submitted,token
   ```
-- ✅ One row per recipient
+- ✅ One row per recipient with their tracking status
+- ✅ Boolean values (1 for true, 0 for false)
 
-**Open in Excel/Google Sheets to verify**
+**Open in Excel/Google Sheets to verify data accuracy**
+
+**API Endpoint:**
+```bash
+curl http://localhost:5000/api/campaigns/1/export \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
 
 ---
 
 ## 10. Testing Training System
 
-### ✅ Feature 45: Training Module Creation
+> **⚠️ IMPORTANT:** The Training System has **backend API endpoints only**. There is **NO frontend UI** implemented for managing training modules, viewing progress, or downloading certificates. All tests in this section require direct API calls using curl or similar tools.
+
+### ✅ Feature 45: Training Module Creation (Backend API Only)
 
 **Test 10.1: Create Training Module**
 
-1. Navigate to **"Training"** tab (if available in UI)
+1. **Note:** No frontend UI exists for this feature
 2. Click **"Create Module"**
 3. Fill form:
    - **Title:** `Phishing Awareness 101`
@@ -1138,7 +1149,7 @@ Create these modules:
 
 ---
 
-### ✅ Feature 46: Training Progress Tracking
+### ✅ Feature 46: Training Progress Tracking (Backend API Only)
 
 **Test 10.3: Track Employee Progress**
 
@@ -1177,7 +1188,7 @@ curl -X POST http://localhost:5000/api/training/progress \
 
 ---
 
-### ✅ Feature 47: Quiz Score Storage
+### ✅ Feature 47: Quiz Score Storage (Backend API Only)
 
 **Test 10.4: Record Quiz Scores**
 
@@ -1194,7 +1205,7 @@ curl -X POST http://localhost:5000/api/training/progress \
 
 ---
 
-### ✅ Feature 48: Certificate Generation
+### ✅ Feature 48: Certificate Generation (Backend API Only - No PDF/UI)
 
 **Test 10.5: Generate Completion Certificate**
 
@@ -1237,7 +1248,7 @@ curl http://localhost:5000/api/certificates/alice@company.com \
 
 ---
 
-### ✅ Feature 49: Learning Resources Library
+### ✅ Feature 49: Learning Resources Library (Backend API Only)
 
 **Test 10.7: Add Learning Resource**
 
@@ -1274,11 +1285,13 @@ curl http://localhost:5000/api/resources \
 
 ## 11. Testing Integrations
 
-### ✅ Feature 50: Webhook System
+> **⚠️ IMPORTANT:** Webhooks and Scheduled Reports have **CRUD API endpoints only**. There is **NO event triggering logic** for webhooks and **NO cron scheduler** for scheduled reports. These features are database stubs only.
 
-**Test 11.1: Create Webhook**
+### ⚠️ Feature 50: Webhook System (CRUD Only - No Event Triggering)
 
-1. Register webhook endpoint
+**Test 11.1: Create Webhook (API Storage Only)**
+
+1. Register webhook endpoint (will be stored but NEVER triggered)
 
 **API Test:**
 ```bash
@@ -1300,10 +1313,17 @@ curl -X POST http://localhost:5000/api/webhooks \
 
 **Test 11.2: Trigger Webhook**
 
+> **❌ THIS TEST WILL FAIL:** No webhook triggering logic is implemented.
+
 1. Complete a campaign
 2. Check webhook endpoint received POST request
 
-**Expected Payload:**
+**Expected Result:**
+- ❌ **Webhook will NOT be triggered**
+- ❌ No event dispatcher exists in the codebase
+- ❌ Webhooks are stored but never called
+
+**What WOULD be sent (if implemented):**
 ```json
 {
   "event": "campaign_completed",
@@ -1323,21 +1343,27 @@ curl -X POST http://localhost:5000/api/webhooks \
 
 **Test 11.3: Test Multiple Webhook Events**
 
-Create webhooks for:
+> **❌ THIS TEST WILL FAIL:** No webhook events are triggered.
+
+You can create webhook registrations for:
 - `campaign_created`
 - `campaign_approved`
 - `campaign_completed`
 - `high_click_rate` (>50%)
 - `employee_clicked`
 
+**But:** None of these events will trigger webhook calls. The event dispatcher is not implemented.
+
 ---
 
-### ✅ Feature 51: Slack Notifications
+### ⚠️ Feature 51: Slack Notifications (Manual POST Only - No Automation)
 
-**Test 11.4: Send Slack Notification**
+**Test 11.4: Send Slack Notification (Manual)**
 
-1. Configure Slack webhook URL in environment
-2. Trigger notification
+1. Configure Slack webhook URL in environment (SLACK_WEBHOOK_URL in .env)
+2. Manually trigger notification via API
+
+> **Note:** Slack integration works but is NOT automated. Campaign events do NOT automatically send Slack notifications. You must manually call the API endpoint.
 
 **API Test:**
 ```bash
@@ -1355,11 +1381,13 @@ curl -X POST http://localhost:5000/api/notifications/slack \
 
 ---
 
-### ✅ Feature 52: Scheduled Reports
+### ⚠️ Feature 52: Scheduled Reports (CRUD Only - No Execution)
 
-**Test 11.5: Schedule Daily Report**
+> **❌ THIS FEATURE DOES NOT WORK:** Scheduled reports can be created but are NEVER executed. No cron scheduler is running.
 
-1. Create scheduled report
+**Test 11.5: Schedule Daily Report (Storage Only)**
+
+1. Create scheduled report (will be stored but NEVER executed)
 
 **API Test:**
 ```bash
@@ -1380,12 +1408,16 @@ curl -X POST http://localhost:5000/api/reports/scheduled \
 
 ---
 
-**Test 11.6: Schedule Weekly Report**
+**Test 11.6: Schedule Weekly Report (Storage Only)**
 
-Create weekly reports for:
+> **❌ These reports will NEVER be executed automatically.**
+
+You can create scheduled report configurations for:
 - Department risk scoring (Mondays 10:00)
 - Employee analytics (Fridays 16:00)
 - Repeat offenders (Wednesdays 14:00)
+
+**But:** No cron scheduler exists to execute these. The `last_run` and `next_run` fields are never updated.
 
 ---
 
@@ -1814,30 +1846,43 @@ docker ps
 
 **Test 15.5: Generate Test Data**
 
-1. Use simulate endpoint:
+1. **Option A - Frontend UI:**
+   - Navigate to Campaign Analytics view
+   - Look for "Simulation Engine" section
+   - Click "Generate Simulated Data" button
 
-```bash
-curl -X POST http://localhost:5000/api/campaigns/1/simulate \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
+2. **Option B - API:**
+   ```bash
+   curl -X POST http://localhost:5000/api/campaigns/1/simulate \
+     -H "Authorization: Bearer YOUR_TOKEN"
+   ```
 
 **Expected Result:**
-- ✅ Random opens, clicks, submits generated
+- ✅ Random opens, clicks, submits generated (realistic percentages)
 - ✅ Analytics populated with test data
+- ✅ Events marked with `is_simulated = 1` flag
 - ✅ Useful for demos without real emails
+- ✅ Real and simulated data shown separately in analytics UI
 
 ---
 
 **Test 15.6: Clear Simulated Data**
 
-```bash
-curl -X DELETE http://localhost:5000/api/campaigns/1/simulate \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
+1. **Option A - Frontend UI:**
+   - Navigate to Campaign Analytics view
+   - Look for "Simulation Engine" section
+   - Click "Clear Simulated Data" button
+
+2. **Option B - API:**
+   ```bash
+   curl -X DELETE http://localhost:5000/api/campaigns/1/simulate \
+     -H "Authorization: Bearer YOUR_TOKEN"
+   ```
 
 **Expected Result:**
-- ✅ Simulated data removed
-- ✅ Real data retained
+- ✅ Simulated data removed (is_simulated = 1 events deleted)
+- ✅ Real data retained (is_simulated = 0 events kept)
+- ✅ Analytics recalculated without simulated events
 
 ---
 
@@ -2174,8 +2219,8 @@ Print this checklist and check off each feature as tested:
 - [ ] Delete group (cascade)
 - [ ] Member count tracking
 
-### Email Templates (15)
-- [ ] View all 15 templates
+### Email Templates (16)
+- [ ] View all 16 templates
 - [ ] Template preview
 - [ ] Placeholder replacement ({{name}}, {{department}})
 
@@ -2196,7 +2241,7 @@ Print this checklist and check off each feature as tested:
 - [ ] Manager notifications
 - [ ] Status workflow
 - [ ] Campaign analytics
-- [ ] Export CSV
+- [ ] Export campaign CSV
 
 ### Email Tracking (11)
 - [ ] Email open tracking (pixel)
@@ -2228,7 +2273,7 @@ Print this checklist and check off each feature as tested:
 - [ ] PDF employee report
 - [ ] PDF department report
 - [ ] PDF repeat offenders report
-- [ ] CSV export
+- [ ] CSV campaign export
 
 ### Training System (9)
 - [ ] Training module creation
@@ -2389,14 +2434,22 @@ Create test report with:
 
 ```markdown
 # Test Report - Phish Train Lite v1.3.0
-**Date:** 2025-11-21
+**Date:** 2025-12-04
 **Tester:** [Your Name]
 
 ## Summary
-- Total Features Tested: 95
-- Passed: X
-- Failed: Y
-- Blocked: Z
+- Total Test Cases Executed: [Count]
+- Fully Functional: [Count]
+- Partially Implemented (Backend Only): [Count]
+- Non-Functional (Stubs Only): [Count]
+- Failed/Blocked: [Count]
+
+## Implementation Status by Category
+- ✅ Core Features (Auth, Campaigns, Tracking, Analytics): Fully Functional
+- ⚠️ Training System: Backend API Only, No UI
+- ⚠️ Webhooks: CRUD API Only, No Event Triggering
+- ⚠️ Scheduled Reports: CRUD API Only, No Cron Execution
+- ⚠️ Slack: Manual POST Only, No Automation
 
 ## Failed Tests
 1. [Feature Name] - [Issue Description]
@@ -2452,5 +2505,6 @@ Create test report with:
 
 **End of Testing Guide**
 
-*Last Updated: 2025-11-21*
+*Last Updated: 2025-12-04*
 *Version: 1.3.0*
+*Updated to reflect actual codebase implementation*

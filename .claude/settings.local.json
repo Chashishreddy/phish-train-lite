@@ -7,7 +7,9 @@
       "Bash(findstr:*)",
       "Bash(node:*)",
       "Bash(netstat:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(cmd //c \"taskkill //PID 36332 //F\")",
+      "Bash(timeout /t 2 /nobreak)"
     ],
     "deny": [],
     "ask": []
