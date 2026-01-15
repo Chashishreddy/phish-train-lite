@@ -3,3 +3,27 @@ nul
 *.sqlite
 # Claude Code local settings
 .claude/
+# Ignore stray Windows "nul" file
+nul
+
+# Env files (never commit)
+.env
+**/.env
+.env.*
+**/.env.*
+!.env.example
+!.env.*.example
+
+# Node deps
+node_modules/
+**/node_modules/
+
+# SQLite / local db files
+*.sqlite
+*.db
+**/*.db
+data/
+**/data/
+
+# Claude local settings
+.claude/
